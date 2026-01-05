@@ -1,0 +1,11 @@
+@import "tailwindcss";
+@layer components {
+  .neon-card {
+    @apply relative bg-slate-900 border border-slate-800 transition-all duration-300;
+    box-shadow: 0 0 15px rgba(59, 130, 246, 0.1);
+  }
+  .neon-card:hover {
+    box-shadow: 0 0 25px rgba(59, 130, 246, 0.4);
+    @apply border-blue-500 scale-[1.02];
+  }
+}
