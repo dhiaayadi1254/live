@@ -9,10 +9,9 @@ import {
 } from "react-simple-maps";
 import { geoCentroid } from "d3-geo";
 
-const geoUrl =
-  "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
+const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
-/* ================= Stars (FIXED) ================= */
+/* ================= Stars ================= */
 const Stars = () => {
   const starsRef = useRef(
     Array.from({ length: 150 }).map(() => ({
@@ -24,42 +23,28 @@ const Stars = () => {
   );
 
   return starsRef.current.map((s, i) => (
-    <circle
-      key={i}
-      cx={s.x}
-      cy={s.y}
-      r={s.r}
-      fill="white"
-      opacity={s.o}
-    />
+    <circle key={i} cx={s.x} cy={s.y} r={s.r} fill="white" opacity={s.o} />
   ));
 };
 
 /* ================= Satellite ================= */
 const Satellite = ({ angle, radius = 150 }) => {
   const rad = (angle * Math.PI) / 180;
-
   return (
-    <Marker
-      coordinates={[
-        Math.cos(rad) * radius,
-        Math.sin(rad) * radius,
-      ]}
-    >
+    <Marker coordinates={[Math.cos(rad) * radius, Math.sin(rad) * radius]}>
       <g>
-        <circle r={2} fill="#38bdf8" />
-        <rect x={-6} y={-1} width={3} height={2} fill="#94a3b8" />
-        <rect x={3} y={-1} width={3} height={2} fill="#94a3b8" />
+        <circle r={2} fill="#38bdf8" className="animate-pulse" />
+        <rect x={-6} y={-1} width={3} height={2} fill="#94a3b8" opacity={0.6} />
+        <rect x={3} y={-1} width={3} height={2} fill="#94a3b8" opacity={0.6} />
       </g>
     </Marker>
   );
 };
 
 const WorldMap = ({ onSelectCountry }) => {
+  // كبرنا الـ Scale في التلفون لـ 550 باش يظهر الكوكب مالي البلاصة
   const [rotation, setRotation] = useState([-15, -30, 0]);
-  const [zoom, setZoom] = useState(
-    window.innerWidth < 768 ? 450 : 350
-  );
+  const [zoom, setZoom] = useState(window.innerWidth < 768 ? 550 : 380);
   const [isDragging, setIsDragging] = useState(false);
   const [satAngle, setSatAngle] = useState(0);
 
@@ -69,12 +54,12 @@ const WorldMap = ({ onSelectCountry }) => {
   /* ========== Satellite animation ========== */
   useEffect(() => {
     const i = setInterval(() => {
-      setSatAngle((a) => (a + 0.4) % 360);
+      setSatAngle((a) => (a + 0.3) % 360);
     }, 30);
     return () => clearInterval(i);
   }, []);
 
-  /* ========== Desktop rotation ========== */
+  /* ========== Handlers ========== */
   const handleMouseMove = (e) => {
     if (!isDragging) return;
     setRotation((prev) => [
@@ -84,7 +69,6 @@ const WorldMap = ({ onSelectCountry }) => {
     ]);
   };
 
-  /* ========== Mobile ========== */
   const handleTouchStart = (e) => {
     setIsDragging(true);
     if (e.touches.length === 1) {
@@ -94,34 +78,25 @@ const WorldMap = ({ onSelectCountry }) => {
   };
 
   const handleTouchMove = (e) => {
-    // Rotate
+    // تدوير بصبع واحد
     if (e.touches.length === 1 && lastTouch.current) {
       const t = e.touches[0];
       const dx = t.clientX - lastTouch.current.x;
       const dy = t.clientY - lastTouch.current.y;
-
-      setRotation((prev) => [
-        prev[0] + dx * 0.25,
-        prev[1] - dy * 0.25,
-        0,
-      ]);
-
+      setRotation((prev) => [prev[0] + dx * 0.3, prev[1] - dy * 0.3, 0]);
       lastTouch.current = { x: t.clientX, y: t.clientY };
     }
 
-    // Pinch zoom
+    // زوم بصوز صوابع (Pinch)
     if (e.touches.length === 2) {
-      const dx =
-        e.touches[0].clientX - e.touches[1].clientX;
-      const dy =
-        e.touches[0].clientY - e.touches[1].clientY;
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
       const distance = Math.sqrt(dx * dx + dy * dy);
 
       if (lastDistance.current) {
         const delta = distance - lastDistance.current;
-        setZoom((prev) =>
-          Math.min(1200, Math.max(250, prev + delta * 2))
-        );
+        // سرعة الزوم Delta * 3 تعطي استجابة أسرع في التلفون
+        setZoom((prev) => Math.min(1500, Math.max(200, prev + delta * 3)));
       }
       lastDistance.current = distance;
     }
@@ -135,15 +110,10 @@ const WorldMap = ({ onSelectCountry }) => {
 
   return (
     <div
-      className="relative w-full h-screen bg-gradient-to-b from-black via-slate-950 to-black
-      overflow-hidden select-none touch-pan-y"
+      className="relative w-full h-screen bg-[#020617] overflow-hidden select-none touch-none"
       onWheel={(e) => {
-        const step = 40;
-        setZoom((prev) =>
-          e.deltaY < 0
-            ? Math.min(prev + step, 1200)
-            : Math.max(prev - step, 250)
-        );
+        const step = 50;
+        setZoom((prev) => (e.deltaY < 0 ? Math.min(prev + step, 1500) : Math.max(prev - step, 200)));
       }}
       onMouseDown={() => setIsDragging(true)}
       onMouseUp={() => setIsDragging(false)}
@@ -152,11 +122,12 @@ const WorldMap = ({ onSelectCountry }) => {
       onTouchMove={handleTouchMove}
       onTouchEnd={handleTouchEnd}
     >
-      {/* Title */}
-      <div className="absolute top-6 left-6 z-20 pointer-events-none">
-        <h2 className="text-2xl md:text-5xl font-black italic text-white">
-          Kora <span className="text-blue-600">Global</span>
+      {/* HUD Overlay */}
+      <div className="absolute top-10 left-8 z-20 pointer-events-none">
+        <h2 className="text-3xl md:text-5xl font-black italic text-white tracking-tighter uppercase">
+          Kora <span className="text-blue-500">Vision</span>
         </h2>
+        <div className="w-12 h-1 bg-blue-500 mt-2 rounded-full animate-pulse" />
       </div>
 
       <div className="w-full h-full flex items-center justify-center">
@@ -165,22 +136,22 @@ const WorldMap = ({ onSelectCountry }) => {
           projectionConfig={{ scale: zoom, rotate: rotation }}
           width={800}
           height={800}
-          style={{ width: "140%", height: "140%" }}
+          // العرض 160% يخلي الكوكب يبان مالي الشاشة في العرض
+          style={{ width: "160%", height: "160%" }}
         >
-          <Sphere fill="#020617" stroke="#1e293b" />
-          <Graticule stroke="#1e293b" opacity={0.15} />
+          <Sphere fill="#050a1a" stroke="#1e293b" strokeWidth={0.5} />
+          <Graticule stroke="#1e293b" opacity={0.2} strokeWidth={0.5} />
 
-          {/* Stars FIXED */}
-          <g opacity={0.8}>
+          <g opacity={0.6}>
             <Stars />
           </g>
 
           {/* Satellites */}
-          <Satellite angle={satAngle} radius={140} />
-          <Satellite angle={satAngle + 120} radius={160} />
-          <Satellite angle={satAngle + 240} radius={180} />
+          <Satellite angle={satAngle} radius={150} />
+          <Satellite angle={satAngle + 120} radius={170} />
+          <Satellite angle={satAngle + 240} radius={190} />
 
-          {/* Countries */}
+          {/* Geographies */}
           <Geographies geography={geoUrl}>
             {({ geographies }) => (
               <>
@@ -188,43 +159,30 @@ const WorldMap = ({ onSelectCountry }) => {
                   <Geography
                     key={geo.rsmKey}
                     geography={geo}
-                    onClick={() =>
-                      !isDragging &&
-                      onSelectCountry?.(geo.properties.name)
-                    }
+                    onClick={() => !isDragging && onSelectCountry?.(geo.properties.name)}
                     style={{
-                      default: {
-                        fill: "#1e293b",
-                        stroke: "#020617",
-                        strokeWidth: 0.5,
-                        outline: "none",
-                      },
-                      hover: {
-                        fill: "#2563eb",
-                        stroke: "#60a5fa",
-                        outline: "none",
-                      },
-                      pressed: {
-                        fill: "#1d4ed8",
-                        outline: "none",
-                      },
+                      default: { fill: "#1e293b", stroke: "#020617", strokeWidth: 0.5, outline: "none" },
+                      hover: { fill: "#2563eb", stroke: "#60a5fa", outline: "none", cursor: "pointer" },
+                      pressed: { fill: "#1d4ed8", outline: "none" },
                     }}
                   />
                 ))}
 
+                {/* Labels with Dynamic Sizing */}
                 {geographies.map((geo) => {
-                  if (zoom < 600) return null;
+                  // تظهر الأسماء فقط عند الزوم القوي لضمان وضوح الخريطة
+                  if (zoom < 650) return null;
                   const c = geoCentroid(geo);
                   return (
-                    <Marker key={geo.rsmKey} coordinates={c}>
+                    <Marker key={geo.rsmKey + "-label"} coordinates={c}>
                       <text
                         textAnchor="middle"
                         fill="white"
                         style={{
-                          fontSize: zoom / 40,
+                          fontSize: zoom / 42,
                           fontWeight: "bold",
                           pointerEvents: "none",
-                          textShadow: "0 0 5px black",
+                          textShadow: "0 0 4px rgba(0,0,0,0.9)",
                         }}
                       >
                         {geo.properties.name}
@@ -238,10 +196,11 @@ const WorldMap = ({ onSelectCountry }) => {
         </ComposableMap>
       </div>
 
-      <div className="absolute bottom-8 w-full flex justify-center pointer-events-none">
-        <div className="bg-blue-600/20 backdrop-blur-md border border-blue-500/30 px-5 py-2 rounded-full">
-          <p className="text-[10px] text-blue-400 font-mono uppercase animate-pulse">
-            One finger rotate · Two fingers zoom
+      {/* Helper Text */}
+      <div className="absolute bottom-12 w-full flex justify-center pointer-events-none">
+        <div className="bg-white/5 backdrop-blur-md border border-white/10 px-6 py-2 rounded-full shadow-2xl">
+          <p className="text-[10px] text-white/60 font-mono uppercase tracking-widest">
+            Pinch to zoom • Drag to rotate
           </p>
         </div>
       </div>
