@@ -1,17 +1,18 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useRef } from "react";
 import { ComposableMap, Geographies, Geography, Sphere, Graticule, Marker } from "react-simple-maps";
-import { motion, AnimatePresence } from "framer-motion";
 import { geoCentroid } from "d3-geo";
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 const WorldMap = ({ onSelectCountry }) => {
-  const [hoveredCountry, setHoveredCountry] = useState(null);
   const [rotation, setRotation] = useState([-15, -30, 0]);
-  const [zoom, setZoom] = useState(window.innerWidth < 768 ? 240 : 350);
+  const [zoom, setZoom] = useState(window.innerWidth < 768 ? 280 : 350); // كبرنا الـ scale للتلفون
   const [isDragging, setIsDragging] = useState(false);
+  
+  // مرجع لتخزين آخر نقطة لمس (ضروري للتلفون)
+  const lastTouch = useRef(null);
 
-  // حساب حركة الماوس للتدوير
+  // تدوير بالماوس (Desktop)
   const handleMouseMove = (e) => {
     if (isDragging) {
       setRotation([
@@ -22,35 +23,65 @@ const WorldMap = ({ onSelectCountry }) => {
     }
   };
 
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const zoomStep = 40;
-    if (e.deltaY < 0) setZoom(prev => Math.min(prev + zoomStep, 1200));
-    else setZoom(prev => Math.max(prev - zoomStep, 180));
+  // تدوير باللمس (Mobile) - هذا هو السحر اللي كان ناقص
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      if (lastTouch.current) {
+        const dx = touch.clientX - lastTouch.current.x;
+        const dy = touch.clientY - lastTouch.current.y;
+        
+        setRotation(prev => [
+          prev[0] + dx * 0.5,
+          prev[1] - dy * 0.5,
+          0
+        ]);
+      }
+      lastTouch.current = { x: touch.clientX, y: touch.clientY };
+    }
+  };
+
+  const handleTouchStart = (e) => {
+    setIsDragging(true);
+    const touch = e.touches[0];
+    lastTouch.current = { x: touch.clientX, y: touch.clientY };
   };
 
   return (
     <div 
-      className="relative w-full h-[85vh] md:h-[90vh] bg-[#020617] md:rounded-[3rem] overflow-hidden touch-none select-none shadow-2xl border border-white/5"
-      onWheel={handleWheel}
+      className="relative w-full h-[80vh] md:h-[90vh] bg-[#020617] overflow-hidden touch-none select-none shadow-2xl"
+      onWheel={(e) => {
+        const zoomStep = 40;
+        setZoom(prev => e.deltaY < 0 ? Math.min(prev + zoomStep, 1200) : Math.max(prev - zoomStep, 200));
+      }}
+      // أحداث الكمبيوتر
       onMouseDown={() => setIsDragging(true)}
       onMouseUp={() => setIsDragging(false)}
-      onMouseLeave={() => setIsDragging(false)}
       onMouseMove={handleMouseMove}
+      // أحداث التلفون
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={() => { setIsDragging(false); lastTouch.current = null; }}
     >
-      {/* Title HUD */}
-      <div className="absolute top-6 left-6 md:top-10 md:left-10 z-20 pointer-events-none">
-        <h2 className="text-xl md:text-5xl font-black italic text-white uppercase tracking-tighter">
+      {/* HUD UI */}
+      <div className="absolute top-6 left-6 z-20 pointer-events-none">
+        <h2 className="text-2xl md:text-5xl font-black italic text-white uppercase tracking-tighter">
           Kora <span className="text-blue-600">Global</span>
         </h2>
-        <div className="h-1 w-8 bg-blue-600 mt-1 rounded-full animate-pulse"></div>
       </div>
 
-      <div className="w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing">
+      <div className="w-full h-full flex items-center justify-center">
         <ComposableMap 
           projection="geoOrthographic" 
-          projectionConfig={{ scale: zoom, rotate: rotation }} 
-          className="w-full h-full outline-none"
+          projectionConfig={{ 
+            scale: zoom, 
+            rotate: rotation 
+          }} 
+          // عرض الخريطة يملى الحاوية
+          width={800}
+          height={800}
+          style={{ width: "120%", height: "120%" }} // كبرنا العرض الفعلي للـ SVG
+          className="outline-none"
         >
           <Sphere stroke="#1e293b" strokeWidth={0.5} fill="#0a0f1d" />
           <Graticule stroke="#1e293b" strokeWidth={0.3} opacity={0.2} />
@@ -63,43 +94,30 @@ const WorldMap = ({ onSelectCountry }) => {
                     key={geo.rsmKey} 
                     geography={geo}
                     onClick={() => !isDragging && onSelectCountry(geo.properties.name)}
-                    onMouseEnter={() => setHoveredCountry(geo.rsmKey)}
-                    onMouseLeave={() => setHoveredCountry(null)}
                     style={{
                       default: { fill: "#1e293b", stroke: "#0f172a", strokeWidth: 0.5, outline: "none" },
-                      hover: { fill: "#2563eb", stroke: "#60a5fa", strokeWidth: 0.8, outline: "none" },
+                      hover: { fill: "#2563eb", stroke: "#60a5fa", outline: "none" },
                       pressed: { fill: "#1d4ed8", outline: "none" },
                     }}
                   />
                 ))}
 
-                {/* رسم الأسامي بطريقة ذكية */}
                 {geographies.map((geo) => {
+                  if (zoom < 600) return null; // الأسامي تظهر كان كي تزومي بالباهي
                   const centroid = geoCentroid(geo);
-                  const name = geo.properties.name;
-                  const isHovered = hoveredCountry === geo.rsmKey;
-
-                  // إظهار الاسم إذا:
-                  // 1. الماوس فوق البلاد
-                  // 2. أو الزوم كبُر (بدأنا نقربو)
-                  const shouldShow = isHovered || zoom > 500;
-                  if (!shouldShow) return null;
-
                   return (
                     <Marker key={geo.rsmKey + "-label"} coordinates={centroid}>
                       <text
                         textAnchor="middle"
-                        fill={isHovered ? "#60a5fa" : "white"}
+                        fill="white"
                         style={{
-                          fontFamily: "sans-serif",
-                          fontSize: isHovered ? (zoom/20) : (zoom/45),
+                          fontSize: zoom / 40,
                           fontWeight: "bold",
                           pointerEvents: "none",
-                          textShadow: "0 0 8px black",
-                          opacity: isHovered ? 1 : 0.6,
+                          textShadow: "0 0 5px black",
                         }}
                       >
-                        {name}
+                        {geo.properties.name}
                       </text>
                     </Marker>
                   );
@@ -110,11 +128,11 @@ const WorldMap = ({ onSelectCountry }) => {
         </ComposableMap>
       </div>
 
-      {/* Footer Info for Mobile */}
-      <div className="absolute bottom-6 w-full flex justify-center pointer-events-none px-4 text-center">
-        <div className="bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full">
-           <p className="text-[9px] md:text-xs text-slate-300 font-mono tracking-widest uppercase">
-             {zoom > 500 ? "Labels Visible • Explore" : "Zoom in to see country names"}
+      {/* تعليمات التلفون */}
+      <div className="absolute bottom-10 w-full flex justify-center pointer-events-none px-4">
+        <div className="bg-blue-600/20 backdrop-blur-md border border-blue-500/30 px-6 py-2 rounded-full">
+           <p className="text-[10px] text-blue-400 font-mono tracking-widest uppercase animate-pulse">
+             Use one finger to rotate
            </p>
         </div>
       </div>
