@@ -1,58 +1,125 @@
-import React, { useState } from "react";
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
+import React, { useState, useMemo } from "react";
+import { ComposableMap, Geographies, Geography, Sphere, Graticule, Marker } from "react-simple-maps";
 import { motion, AnimatePresence } from "framer-motion";
+import { geoCentroid } from "d3-geo";
 
 const geoUrl = "https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json";
 
 const WorldMap = ({ onSelectCountry }) => {
-  const [tooltipContent, setTooltipContent] = useState("");
-  const [tooltipPos, setTooltipPos] = useState({ x: 0, y: 0 });
+  const [hoveredCountry, setHoveredCountry] = useState(null);
+  const [rotation, setRotation] = useState([-15, -30, 0]);
+  const [zoom, setZoom] = useState(window.innerWidth < 768 ? 240 : 350);
+  const [isDragging, setIsDragging] = useState(false);
+
+  // حساب حركة الماوس للتدوير
+  const handleMouseMove = (e) => {
+    if (isDragging) {
+      setRotation([
+        rotation[0] + (e.movementX || 0) * 0.5,
+        rotation[1] - (e.movementY || 0) * 0.5,
+        0
+      ]);
+    }
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const zoomStep = 40;
+    if (e.deltaY < 0) setZoom(prev => Math.min(prev + zoomStep, 1200));
+    else setZoom(prev => Math.max(prev - zoomStep, 180));
+  };
 
   return (
-    <div className="relative w-full h-[75vh] bg-slate-950 rounded-[2.5rem] border border-blue-500/20 shadow-2xl overflow-hidden cursor-crosshair"
-         onMouseMove={(e) => setTooltipPos({ x: e.clientX, y: e.clientY })}>
-      <div className="absolute inset-0 opacity-10 pointer-events-none" 
-           style={{ backgroundImage: 'linear-gradient(#334155 1px, transparent 1px), linear-gradient(90deg, #334155 1px, transparent 1px)', backgroundSize: '30px 30px' }}>
+    <div 
+      className="relative w-full h-[85vh] md:h-[90vh] bg-[#020617] md:rounded-[3rem] overflow-hidden touch-none select-none shadow-2xl border border-white/5"
+      onWheel={handleWheel}
+      onMouseDown={() => setIsDragging(true)}
+      onMouseUp={() => setIsDragging(false)}
+      onMouseLeave={() => setIsDragging(false)}
+      onMouseMove={handleMouseMove}
+    >
+      {/* Title HUD */}
+      <div className="absolute top-6 left-6 md:top-10 md:left-10 z-20 pointer-events-none">
+        <h2 className="text-xl md:text-5xl font-black italic text-white uppercase tracking-tighter">
+          Kora <span className="text-blue-600">Global</span>
+        </h2>
+        <div className="h-1 w-8 bg-blue-600 mt-1 rounded-full animate-pulse"></div>
       </div>
 
-      <AnimatePresence>
-        {tooltipContent && (
-          <motion.div initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.5 }}
-            className="fixed z-[100] pointer-events-none px-4 py-2 bg-blue-600 text-white font-bold rounded-lg shadow-lg border border-blue-400 text-sm flex items-center gap-2"
-            style={{ left: tooltipPos.x + 15, top: tooltipPos.y - 40 }}>
-            <span className="w-2 h-2 bg-white rounded-full animate-ping"></span>
-            {tooltipContent}
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      <div className="absolute top-8 left-10 z-10 pointer-events-none">
-        <div className="flex items-center gap-3 mb-2">
-          <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse shadow-[0_0_10px_red]"></div>
-          <span className="text-blue-400 font-mono text-xs tracking-[0.3em] uppercase">System Online</span>
-        </div>
-        <h2 className="text-4xl font-black italic bg-gradient-to-b from-white to-slate-500 bg-clip-text text-transparent">KORA LIVE MAP</h2>
-      </div>
-
-      <ComposableMap projectionConfig={{ scale: 200 }}>
-        <ZoomableGroup center={[20, 0]} maxZoom={3}>
+      <div className="w-full h-full flex items-center justify-center cursor-grab active:cursor-grabbing">
+        <ComposableMap 
+          projection="geoOrthographic" 
+          projectionConfig={{ scale: zoom, rotate: rotation }} 
+          className="w-full h-full outline-none"
+        >
+          <Sphere stroke="#1e293b" strokeWidth={0.5} fill="#0a0f1d" />
+          <Graticule stroke="#1e293b" strokeWidth={0.3} opacity={0.2} />
+          
           <Geographies geography={geoUrl}>
-            {({ geographies }) => geographies.map((geo) => (
-              <Geography key={geo.rsmKey} geography={geo}
-                onMouseEnter={() => setTooltipContent(geo.properties.name)}
-                onMouseLeave={() => setTooltipContent("")}
-                onClick={() => onSelectCountry(geo.properties.name)}
-                style={{
-                  default: { fill: "#0f172a", stroke: "#1e293b", strokeWidth: 0.5, outline: "none" },
-                  hover: { fill: "#2563eb", stroke: "#60a5fa", strokeWidth: 1.5, cursor: "pointer", outline: "none" },
-                  pressed: { fill: "#1d4ed8", outline: "none" },
-                }}
-              />
-            ))}
+            {({ geographies }) => (
+              <>
+                {geographies.map((geo) => (
+                  <Geography 
+                    key={geo.rsmKey} 
+                    geography={geo}
+                    onClick={() => !isDragging && onSelectCountry(geo.properties.name)}
+                    onMouseEnter={() => setHoveredCountry(geo.rsmKey)}
+                    onMouseLeave={() => setHoveredCountry(null)}
+                    style={{
+                      default: { fill: "#1e293b", stroke: "#0f172a", strokeWidth: 0.5, outline: "none" },
+                      hover: { fill: "#2563eb", stroke: "#60a5fa", strokeWidth: 0.8, outline: "none" },
+                      pressed: { fill: "#1d4ed8", outline: "none" },
+                    }}
+                  />
+                ))}
+
+                {/* رسم الأسامي بطريقة ذكية */}
+                {geographies.map((geo) => {
+                  const centroid = geoCentroid(geo);
+                  const name = geo.properties.name;
+                  const isHovered = hoveredCountry === geo.rsmKey;
+
+                  // إظهار الاسم إذا:
+                  // 1. الماوس فوق البلاد
+                  // 2. أو الزوم كبُر (بدأنا نقربو)
+                  const shouldShow = isHovered || zoom > 500;
+                  if (!shouldShow) return null;
+
+                  return (
+                    <Marker key={geo.rsmKey + "-label"} coordinates={centroid}>
+                      <text
+                        textAnchor="middle"
+                        fill={isHovered ? "#60a5fa" : "white"}
+                        style={{
+                          fontFamily: "sans-serif",
+                          fontSize: isHovered ? (zoom/20) : (zoom/45),
+                          fontWeight: "bold",
+                          pointerEvents: "none",
+                          textShadow: "0 0 8px black",
+                          opacity: isHovered ? 1 : 0.6,
+                        }}
+                      >
+                        {name}
+                      </text>
+                    </Marker>
+                  );
+                })}
+              </>
+            )}
           </Geographies>
-        </ZoomableGroup>
-      </ComposableMap>
+        </ComposableMap>
+      </div>
+
+      {/* Footer Info for Mobile */}
+      <div className="absolute bottom-6 w-full flex justify-center pointer-events-none px-4 text-center">
+        <div className="bg-black/40 backdrop-blur-md border border-white/10 px-4 py-2 rounded-full">
+           <p className="text-[9px] md:text-xs text-slate-300 font-mono tracking-widest uppercase">
+             {zoom > 500 ? "Labels Visible • Explore" : "Zoom in to see country names"}
+           </p>
+        </div>
+      </div>
     </div>
   );
 };
+
 export default WorldMap;
